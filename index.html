@@ -5151,8 +5151,17 @@
       
       let isSignUp = false;
 
-      const startApp = () => {
+      const startApp = async () => {
         authOverlay.style.display = 'none';
+        
+        const loader = document.createElement('div');
+        loader.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg-main);z-index:9999;display:flex;align-items:center;justify-content:center;color:var(--text-main);font-size:18px;';
+        loader.innerHTML = '<div class="spinner" style="margin-right:12px;"></div> Syncing cloud data...';
+        document.body.appendChild(loader);
+
+        await pullFromFirestore();
+        loader.remove();
+
         App.init();
         if (typeof QuestEngine !== 'undefined') QuestEngine.checkAndRefresh();
         if (typeof AchievementEngine !== 'undefined') AchievementEngine.check();
@@ -5178,10 +5187,9 @@
               window.FirebaseSignInWithPopup(window.FirebaseAuth, window.FirebaseGoogleProvider)
                 .then(async (result) => {
                   AuthEngine.currentUser = { email: result.user.email, name: result.user.displayName || 'Google User', uid: result.user.uid };
-                  
-                  // Show loading state while syncing
+                  localStorage.setItem('nova_current_user', result.user.email);
                   submitBtn.textContent = 'Syncing Data...';
-                  await pullFromFirestore();
+                  startApp();
                   
                   startApp();
                 }).catch((error) => {
@@ -5224,9 +5232,9 @@
                 .then(async (cred) => {
                    window.FirebaseSendVerification(cred.user).catch(console.warn);
                    AuthEngine.currentUser = { email: cred.user.email, name, uid: cred.user.uid };
+                   localStorage.setItem('nova_current_user', cred.user.email);
                    
                    submitBtn.textContent = 'Syncing...';
-                   await pullFromFirestore();
                    
                    // Save name to firestore explicitly on signup
                    saveToStorage('user_name', name);
@@ -5241,9 +5249,9 @@
               window.FirebaseSignInUser(window.FirebaseAuth, email, pwd)
                 .then(async (cred) => {
                    AuthEngine.currentUser = { email: cred.user.email, name: 'User', uid: cred.user.uid };
+                   localStorage.setItem('nova_current_user', cred.user.email);
                    
                    submitBtn.textContent = 'Syncing Data...';
-                   await pullFromFirestore();
                    
                    startApp();
                 }).catch(err => {
@@ -5322,7 +5330,7 @@
   </script>
   <!-- Quick Add FAB -->
   <button id="fab-quick-add" class="btn btn--primary"
-    style="position: fixed; bottom: 32px; right: 32px; width: 56px; height: 56px; border-radius: 50%; box-shadow: 0 8px 24px rgba(108, 92, 231, 0.4); z-index: 1000; font-size: 24px; display: flex; align-items: center; justify-content: center;">
+    style="display: none !important;">
     <i class="ti ti-plus"></i>
   </button>
 
