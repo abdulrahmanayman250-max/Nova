@@ -1428,10 +1428,10 @@
           const docSnap = await window.FirebaseGetDoc(docRef);
           if (docSnap.exists()) {
             const data = docSnap.data();
-            const prefix = \`nova_\${AuthEngine.currentUser.email}_\`;
+            const prefix = `nova_${AuthEngine.currentUser.email}_`;
             for (const key in data) {
               if (key === 'email' || key === 'name') continue; // Don't override auth basics
-              localStorage.setItem(\`\${prefix}\${key}\`, JSON.stringify(data[key]));
+              localStorage.setItem(`${prefix}${key}`, JSON.stringify(data[key]));
             }
           }
         } catch (e) {
@@ -1443,8 +1443,8 @@
     // SAVE
     function saveToStorage(key, value) {
       try {
-        const prefix = AuthEngine.currentUser ? \`nova_\${AuthEngine.currentUser.email}_\` : \`nova_\`;
-        localStorage.setItem(\`\${prefix}\${key}\`, JSON.stringify(value));
+        const prefix = AuthEngine.currentUser ? `nova_${AuthEngine.currentUser.email}_` : `nova_`;
+        localStorage.setItem(`${prefix}${key}`, JSON.stringify(value));
 
         // Sync to Firestore if available
         if (window.FirebaseFirestore && AuthEngine.currentUser) {
