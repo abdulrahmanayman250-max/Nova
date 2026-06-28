@@ -1367,8 +1367,15 @@
         }
 
         const savedUser = localStorage.getItem('nova_current_user');
-        if (savedUser && db[savedUser]) {
-          this.currentUser = db[savedUser];
+        if (savedUser) {
+          try {
+             this.currentUser = JSON.parse(savedUser);
+          } catch {
+             if (db[savedUser]) {
+               this.currentUser = db[savedUser];
+               localStorage.setItem('nova_current_user', JSON.stringify(this.currentUser));
+             }
+          }
         }
       },
 
@@ -1389,7 +1396,7 @@
         const user = db[email];
         if (user && user.password === password) {
           this.currentUser = user;
-          localStorage.setItem('nova_current_user', email);
+          localStorage.setItem('nova_current_user', JSON.stringify(user));
           return true;
         }
         return false;
@@ -1422,20 +1429,16 @@
     // PULL FROM FIRESTORE
     async function pullFromFirestore() {
       if (window.FirebaseFirestore && AuthEngine.currentUser) {
-        try {
-          const uid = AuthEngine.currentUser.uid;
-          const docRef = window.FirebaseDoc(window.FirebaseFirestore, 'users', uid);
-          const docSnap = await window.FirebaseGetDoc(docRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            const prefix = `nova_${AuthEngine.currentUser.email}_`;
-            for (const key in data) {
-              if (key === 'email' || key === 'name') continue; // Don't override auth basics
-              localStorage.setItem(`${prefix}${key}`, JSON.stringify(data[key]));
-            }
+        const uid = AuthEngine.currentUser.uid;
+        const docRef = window.FirebaseDoc(window.FirebaseFirestore, 'users', uid);
+        const docSnap = await window.FirebaseGetDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const prefix = `nova_${AuthEngine.currentUser.email}_`;
+          for (const key in data) {
+            if (key === 'email' || key === 'name') continue; // Don't override auth basics
+            localStorage.setItem(`${prefix}${key}`, JSON.stringify(data[key]));
           }
-        } catch (e) {
-          console.error("Failed to pull from Firestore:", e);
         }
       }
     }
@@ -5151,26 +5154,35 @@
       
       let isSignUp = false;
 
-      const startApp = async () => {
+      const startApp = () => {
         authOverlay.style.display = 'none';
         
+        // Show non-blocking loader
         const loader = document.createElement('div');
-        loader.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg-main);z-index:9999;display:flex;align-items:center;justify-content:center;color:var(--text-main);font-size:18px;';
-        loader.innerHTML = '<div class="spinner" style="margin-right:12px;"></div> Syncing cloud data...';
+        loader.id = 'sync-loader';
+        loader.style.cssText = 'position:fixed;top:16px;right:16px;background:var(--bg-card);padding:8px 16px;border-radius:20px;box-shadow:0 4px 12px rgba(0,0,0,0.2);z-index:9999;display:flex;align-items:center;color:var(--text-main);font-size:12px; border: 1px solid var(--border-color);';
+        loader.innerHTML = '<div class="spinner" style="margin-right:8px; width:14px; height:14px; border-width:2px;"></div> Syncing Cloud...';
         document.body.appendChild(loader);
 
-        await pullFromFirestore();
-        loader.remove();
-
+        // Instantly load local data so user isn't blocked
         App.init();
         if (typeof QuestEngine !== 'undefined') QuestEngine.checkAndRefresh();
         if (typeof AchievementEngine !== 'undefined') AchievementEngine.check();
 
-        // Update greeting based on auth if they haven't onboarded fully yet
         if (AuthEngine.currentUser && !Store.state.user.onboarded) {
            Store.state.user.name = AuthEngine.currentUser.name;
            Store.notify();
         }
+
+        // Pull from cloud in the background
+        pullFromFirestore().then(() => {
+           loader.remove();
+           Store.init(); // Refresh UI with cloud data
+        }).catch((err) => {
+           console.error(err);
+           loader.innerHTML = '<i class="ti ti-alert-triangle" style="color:var(--danger);margin-right:8px;"></i> Cloud DB Not Setup';
+           setTimeout(() => loader.remove(), 5000);
+        });
       };
 
       if (AuthEngine.currentUser) {
@@ -5187,7 +5199,7 @@
               window.FirebaseSignInWithPopup(window.FirebaseAuth, window.FirebaseGoogleProvider)
                 .then(async (result) => {
                   AuthEngine.currentUser = { email: result.user.email, name: result.user.displayName || 'Google User', uid: result.user.uid };
-                  localStorage.setItem('nova_current_user', result.user.email);
+                  localStorage.setItem('nova_current_user', JSON.stringify(AuthEngine.currentUser));
                   submitBtn.textContent = 'Syncing Data...';
                   startApp();
                   
@@ -5232,7 +5244,7 @@
                 .then(async (cred) => {
                    window.FirebaseSendVerification(cred.user).catch(console.warn);
                    AuthEngine.currentUser = { email: cred.user.email, name, uid: cred.user.uid };
-                   localStorage.setItem('nova_current_user', cred.user.email);
+                   localStorage.setItem('nova_current_user', JSON.stringify(AuthEngine.currentUser));
                    
                    submitBtn.textContent = 'Syncing...';
                    
@@ -5249,7 +5261,7 @@
               window.FirebaseSignInUser(window.FirebaseAuth, email, pwd)
                 .then(async (cred) => {
                    AuthEngine.currentUser = { email: cred.user.email, name: 'User', uid: cred.user.uid };
-                   localStorage.setItem('nova_current_user', cred.user.email);
+                   localStorage.setItem('nova_current_user', JSON.stringify(AuthEngine.currentUser));
                    
                    submitBtn.textContent = 'Syncing Data...';
                    
